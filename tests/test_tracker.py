@@ -35,6 +35,21 @@ class TrackerLogicTests(unittest.TestCase):
 
         self.assertTrue(tracker._is_juggle_event(base + 0.21, frame_height=400))
 
+    def test_split_motion_windows_avoids_overlapping_midpoint(self) -> None:
+        points = [
+            (0.00, 240.0, 250.0),
+            (0.05, 240.0, 272.0),
+            (0.10, 240.0, 316.0),
+            (0.15, 240.0, 274.0),
+            (0.20, 240.0, 232.0),
+        ]
+
+        downward_window, upward_window = JuggleTracker._split_motion_windows(points)
+
+        self.assertEqual(downward_window, points[:3])
+        self.assertEqual(upward_window, points[3:])
+        self.assertTrue(set(downward_window).isdisjoint(set(upward_window)))
+
     def test_is_juggle_event_respects_touch_cooldown(self) -> None:
         tracker = JuggleTracker(TrackerConfig(kick_zone_ratio=0.70, reversal_speed=160.0, min_travel_px=30.0))
         base = 100.0
@@ -51,6 +66,30 @@ class TrackerLogicTests(unittest.TestCase):
         tracker.last_touch_time = base + 0.05
 
         self.assertFalse(tracker._is_juggle_event(base + 0.21, frame_height=400))
+
+    def test_upward_reversal_factor_is_configurable(self) -> None:
+        points = deque(
+            [
+                (0.00, 240.0, 240.0),
+                (0.05, 240.0, 260.0),
+                (0.10, 240.0, 300.0),
+                (0.15, 240.0, 293.0),
+                (0.20, 240.0, 286.0),
+            ],
+            maxlen=7,
+        )
+
+        permissive = JuggleTracker(
+            TrackerConfig(kick_zone_ratio=0.70, reversal_speed=160.0, upward_reversal_factor=0.40, min_travel_px=30.0)
+        )
+        strict = JuggleTracker(
+            TrackerConfig(kick_zone_ratio=0.70, reversal_speed=160.0, upward_reversal_factor=0.90, min_travel_px=30.0)
+        )
+        permissive.motion_points = points.copy()
+        strict.motion_points = points.copy()
+
+        self.assertTrue(permissive._is_juggle_event(1.21, frame_height=400))
+        self.assertFalse(strict._is_juggle_event(1.21, frame_height=400))
 
     def test_record_touch_updates_streak_and_average_gap(self) -> None:
         tracker = JuggleTracker(TrackerConfig(streak_gap_reset_seconds=2.0))

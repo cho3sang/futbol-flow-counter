@@ -9,7 +9,8 @@ from tkinter import filedialog, messagebox
 import cv2
 from PIL import Image, ImageTk
 
-from session_store import SessionRecord, SessionStore
+from session_controller import SessionController
+from session_store import SessionRecord
 from tracker import JuggleTracker, TrackerMetrics
 
 
@@ -23,21 +24,16 @@ class FutbolFlowApp:
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
         self.tracker = JuggleTracker()
-        self.session_store = SessionStore()
-        self.history_summary = self.session_store.fetch_summary()
+        self.session_controller = SessionController()
+        self.history_summary = self.session_controller.summary
 
         self.capture: cv2.VideoCapture | None = None
         self.photo_image: ImageTk.PhotoImage | None = None
         self.current_source_name = "No source selected"
         self.current_source_kind = "none"
         self.is_paused = False
-        self.active_session_saved = False
-        self.session_started_at: float | None = None
-        self.session_started_wallclock: datetime | None = None
-        self.pause_started_at: float | None = None
-        self.paused_duration = 0.0
-        self.personal_best_target = self.history_summary.personal_best
-        self.new_record_session = False
+        self.loop_interval_ms = 15
+        self.loop_after_id: str | None = None
 
         self.count_var = tk.StringVar(value="0")
         self.status_var = tk.StringVar(value="Ready for kickoff")
@@ -55,12 +51,14 @@ class FutbolFlowApp:
         self.avg_session_var = tk.StringVar(value=self._format_duration_short(self.history_summary.average_duration_seconds))
         self.recent_history_var = tk.StringVar(value="")
         self.source_var = tk.StringVar(value=self.current_source_name)
+        self.default_tip = "Clear backgrounds, a steady camera, and full lower-body framing all improve tracking."
         self.tip_var = tk.StringVar(
-            value="Clear backgrounds, a steady camera, and full lower-body framing all improve tracking."
+            value=self.default_tip
         )
 
         self.kick_zone_var = tk.DoubleVar(value=self.tracker.config.kick_zone_ratio * 100.0)
         self.reversal_var = tk.DoubleVar(value=self.tracker.config.reversal_speed)
+        self.upward_recovery_var = tk.DoubleVar(value=self.tracker.config.upward_reversal_factor * 100.0)
         self.area_var = tk.IntVar(value=self.tracker.config.min_area)
         self.mirror_var = tk.BooleanVar(value=True)
         self.show_trail_var = tk.BooleanVar(value=True)
@@ -69,7 +67,7 @@ class FutbolFlowApp:
         self._refresh_history_panel()
         self._apply_settings()
         self._show_placeholder()
-        self._update_loop()
+        self._schedule_next_loop(0)
 
     def _build_ui(self) -> None:
         shell = tk.Frame(self.root, bg="#071013")
@@ -400,6 +398,7 @@ class FutbolFlowApp:
 
         self._slider_block(card, "Kick Zone Height", self.kick_zone_var, 55, 85, self._on_slider_change, "%")
         self._slider_block(card, "Rebound Speed", self.reversal_var, 90, 320, self._on_slider_change, " px/s")
+        self._slider_block(card, "Upward Recovery", self.upward_recovery_var, 35, 90, self._on_slider_change, "%")
         self._slider_block(card, "Motion Area", self.area_var, 80, 360, self._on_slider_change, " px")
 
         toggles = tk.Frame(card, bg="#0f1a1f")
@@ -557,6 +556,7 @@ class FutbolFlowApp:
     def _apply_settings(self) -> None:
         self.tracker.config.kick_zone_ratio = float(self.kick_zone_var.get()) / 100.0
         self.tracker.config.reversal_speed = float(self.reversal_var.get())
+        self.tracker.config.upward_reversal_factor = float(self.upward_recovery_var.get()) / 100.0
         self.tracker.config.min_area = int(self.area_var.get())
         self.tracker.show_trail = bool(self.show_trail_var.get())
         if not self.tracker.show_trail:
@@ -566,15 +566,13 @@ class FutbolFlowApp:
         self._apply_settings()
 
     def _refresh_history_panel(self) -> None:
-        self.history_summary = self.session_store.fetch_summary()
+        self.history_summary = self.session_controller.refresh_summary()
         self.personal_best_var.set(str(self.history_summary.personal_best))
         self.best_streak_var.set(str(self.history_summary.best_streak))
         self.saved_sessions_var.set(str(self.history_summary.sessions_played))
         self.total_touches_var.set(str(self.history_summary.total_juggles))
         self.avg_session_var.set(self._format_duration_short(self.history_summary.average_duration_seconds))
-        self.recent_history_var.set(self._format_recent_sessions(self.session_store.fetch_recent_sessions(4)))
-        if self.session_started_at is None or self.active_session_saved:
-            self.personal_best_target = self.history_summary.personal_best
+        self.recent_history_var.set(self._format_recent_sessions(self.session_controller.store.fetch_recent_sessions(4)))
 
     def start_webcam(self) -> None:
         self._open_capture(0, "Webcam 0", "camera")
@@ -590,7 +588,7 @@ class FutbolFlowApp:
         self._open_capture(file_path, Path(file_path).name, "video")
 
     def _open_capture(self, source: int | str, source_name: str, source_kind: str) -> None:
-        self._persist_session_if_needed("switch-source")
+        self._save_session_if_needed("switch-source")
         self._release_capture()
 
         capture = cv2.VideoCapture(source)
@@ -625,16 +623,14 @@ class FutbolFlowApp:
         self.pause_button.config(text="Resume" if self.is_paused else "Pause")
 
         if self.is_paused:
-            self.pause_started_at = time.monotonic()
+            self.session_controller.pause()
             self._set_status_text("Paused")
         else:
-            if self.pause_started_at is not None:
-                self.paused_duration += time.monotonic() - self.pause_started_at
-                self.pause_started_at = None
+            self.session_controller.resume()
             self._set_status_text("Tracking resumed")
 
     def reset_session(self) -> None:
-        self._persist_session_if_needed("reset")
+        self._save_session_if_needed("reset")
         self.tracker.restart()
         self._apply_settings()
         self.count_var.set("0")
@@ -648,53 +644,20 @@ class FutbolFlowApp:
         self._set_status_text("Session reset")
 
     def _reset_session_clock(self) -> None:
-        self.session_started_at = time.monotonic()
-        self.session_started_wallclock = datetime.now().replace(microsecond=0)
-        self.pause_started_at = None
-        self.paused_duration = 0.0
-        self.active_session_saved = False
-        self.new_record_session = False
-        self.personal_best_target = self.history_summary.personal_best
+        self.session_controller.begin_session()
         self.session_var.set("00:00")
         self._update_record_banner(0)
 
-    def _current_session_elapsed(self) -> float:
-        if self.session_started_at is None:
-            return 0.0
-
-        now = time.monotonic()
-        paused_now = (now - self.pause_started_at) if (self.is_paused and self.pause_started_at) else 0.0
-        return max(0.0, now - self.session_started_at - self.paused_duration - paused_now)
-
-    def _persist_session_if_needed(self, reason: str) -> None:
-        if self.active_session_saved or self.session_started_at is None or self.session_started_wallclock is None:
-            return
-
-        duration = self._current_session_elapsed()
-        has_meaningful_activity = self.tracker.total_juggles > 0 or duration >= 12.0
-        if not has_meaningful_activity:
-            return
-
-        ended_at = datetime.now().replace(microsecond=0)
-        source_name = self.current_source_name.replace("Source: ", "")
-        if source_name == "No source selected":
-            source_name = "Manual session"
-
-        self.session_store.save_session(
-            SessionRecord(
-                started_at=self.session_started_wallclock.isoformat(sep=" "),
-                ended_at=ended_at.isoformat(sep=" "),
-                source_name=source_name,
-                duration_seconds=duration,
-                total_juggles=self.tracker.total_juggles,
-                average_touch_interval=self.tracker.average_touch_interval,
-                best_streak=self.tracker.best_streak,
-            )
+    def _save_session_if_needed(self, reason: str) -> None:
+        saved = self.session_controller.persist_if_needed(
+            total_juggles=self.tracker.total_juggles,
+            average_touch_interval=self.tracker.average_touch_interval,
+            best_streak=self.tracker.best_streak,
+            source_name=self.current_source_name,
+            reason=reason,
         )
-        self.active_session_saved = True
-        self._refresh_history_panel()
-
-        if reason != "close":
+        if saved:
+            self._refresh_history_panel()
             self.tip_var.set("Session saved to local history. Open a new source or reset to keep training.")
 
     def _release_capture(self) -> None:
@@ -737,16 +700,28 @@ class FutbolFlowApp:
             self.status_pill.config(bg="#433827", fg="#ffe2ad")
 
     def _update_record_banner(self, total_juggles: int) -> None:
-        if total_juggles > self.personal_best_target:
+        if total_juggles > self.session_controller.personal_best_target:
             self.record_var.set(f"NEW RECORD · {total_juggles} touches")
             self.record_banner.config(bg="#214b2c", fg="#e8fff0")
-        elif self.personal_best_target > 0:
-            remaining = max(self.personal_best_target - total_juggles, 0)
-            self.record_var.set(f"{remaining} to beat your PB of {self.personal_best_target}")
+        elif self.session_controller.personal_best_target > 0:
+            remaining = max(self.session_controller.personal_best_target - total_juggles, 0)
+            self.record_var.set(f"{remaining} to beat your PB of {self.session_controller.personal_best_target}")
             self.record_banner.config(bg="#1d2f35", fg="#d7eff2")
         else:
             self.record_var.set("First saved session becomes your personal best.")
             self.record_banner.config(bg="#1d2f35", fg="#d7eff2")
+
+    def _update_tip(self, metrics: TrackerMetrics) -> None:
+        if metrics.predicted:
+            self.tip_var.set("Kalman prediction is carrying the trail through a brief occlusion.")
+        elif metrics.status_text == "Juggle counted":
+            self.tip_var.set("Touch logged. Keep the ball in the kick zone to build your streak.")
+        elif metrics.status_text == "Searching for the ball" and metrics.lost_frames >= 20:
+            self.tip_var.set("Tracking lost. Try brighter lighting, step back a little, or keep the full ball visible.")
+        elif metrics.status_text == "Searching for the ball" and metrics.lost_frames >= 8:
+            self.tip_var.set("Ball slipping out of track. Keep the full ball clear of your legs and near the kick zone.")
+        elif metrics.status_text == "Tracking locked":
+            self.tip_var.set(self.default_tip)
 
     def _update_metrics(self, metrics: TrackerMetrics) -> None:
         self.count_var.set(str(metrics.total_juggles))
@@ -765,23 +740,19 @@ class FutbolFlowApp:
         else:
             self.avg_gap_var.set(f"{metrics.average_touch_interval:0.2f}s")
 
-        if metrics.predicted:
-            self.tip_var.set("Kalman prediction is carrying the trail through a brief occlusion.")
-        elif metrics.status_text == "Juggle counted":
-            self.tip_var.set("Touch logged. Keep the ball in the kick zone to build your streak.")
+        self._update_tip(metrics)
 
-        if metrics.total_juggles > self.personal_best_target and not self.new_record_session:
-            self.new_record_session = True
+        if self.session_controller.mark_record_if_needed(metrics.total_juggles):
             self.tip_var.set("New personal best. This session will be saved to your history panel.")
 
-        live_personal_best = max(self.history_summary.personal_best, metrics.total_juggles)
-        live_best_streak = max(self.history_summary.best_streak, metrics.best_streak)
+        live_personal_best = self.session_controller.live_personal_best(metrics.total_juggles)
+        live_best_streak = self.session_controller.live_best_streak(metrics.best_streak)
         self.personal_best_var.set(str(live_personal_best))
         self.best_streak_var.set(str(live_best_streak))
         self._update_record_banner(metrics.total_juggles)
 
     def _update_session_clock(self) -> None:
-        elapsed = self._current_session_elapsed()
+        elapsed = self.session_controller.elapsed_seconds()
         minutes, seconds = divmod(int(elapsed), 60)
         hours, minutes = divmod(minutes, 60)
         if hours:
@@ -794,9 +765,14 @@ class FutbolFlowApp:
         self.pause_button.config(text="Resume")
         self._set_status_text("Source ended")
         self.tip_var.set("Session finished. Open another clip or reset to start a new tracked run.")
-        self._persist_session_if_needed("source-ended")
+        self._save_session_if_needed("source-ended")
+
+    def _schedule_next_loop(self, delay_ms: int | None = None) -> None:
+        next_delay = self.loop_interval_ms if delay_ms is None else delay_ms
+        self.loop_after_id = self.root.after(next_delay, self._update_loop)
 
     def _update_loop(self) -> None:
+        loop_started = time.perf_counter()
         if self.capture and self.capture.isOpened():
             self._update_session_clock()
 
@@ -813,10 +789,14 @@ class FutbolFlowApp:
                 else:
                     self._handle_source_end()
 
-        self.root.after(15, self._update_loop)
+        elapsed_ms = int((time.perf_counter() - loop_started) * 1000)
+        self._schedule_next_loop(max(5, self.loop_interval_ms - elapsed_ms))
 
     def on_close(self) -> None:
-        self._persist_session_if_needed("close")
+        if self.loop_after_id is not None:
+            self.root.after_cancel(self.loop_after_id)
+            self.loop_after_id = None
+        self._save_session_if_needed("close")
         self._release_capture()
         self.root.destroy()
 

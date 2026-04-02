@@ -17,6 +17,7 @@ class TrackerConfig:
     min_area: int = 140
     kick_zone_ratio: float = 0.72
     reversal_speed: float = 165.0
+    upward_reversal_factor: float = 0.58
     min_travel_px: float = 32.0
     tracking_distance_px: float = 180.0
     touch_cooldown: float = 0.30
@@ -48,6 +49,7 @@ class TrackerMetrics:
     current_streak: int
     best_streak: int
     average_touch_interval: float | None
+    lost_frames: int
 
 
 class JuggleTracker:
@@ -190,6 +192,7 @@ class JuggleTracker:
             current_streak=self.current_streak,
             best_streak=self.best_streak,
             average_touch_interval=self.average_touch_interval,
+            lost_frames=self.lost_frames,
         )
         return annotated, metrics
 
@@ -376,6 +379,7 @@ class JuggleTracker:
             return False
 
         recent_points = list(self.motion_points)[-5:]
+        downward_window, upward_window = self._split_motion_windows(recent_points)
         y_values = [point[2] for point in recent_points]
         lowest_visible_point = max(y_values)
         kick_zone_y = frame_height * self.config.kick_zone_ratio
@@ -383,20 +387,33 @@ class JuggleTracker:
         if lowest_visible_point < kick_zone_y:
             return False
 
-        downward_speed = self._average_vertical_speed(recent_points[:3])
-        upward_speed = self._average_vertical_speed(recent_points[2:])
+        downward_speed = self._average_vertical_speed(downward_window)
+        upward_speed = self._average_vertical_speed(upward_window)
         travel = lowest_visible_point - min(y_values)
 
         if downward_speed < self.config.reversal_speed:
             return False
 
-        if upward_speed > (-self.config.reversal_speed * 0.58):
+        if upward_speed > (-self.config.reversal_speed * self.config.upward_reversal_factor):
             return False
 
         if travel < self.config.min_travel_px:
             return False
 
         return True
+
+    @staticmethod
+    def _split_motion_windows(
+        points: list[tuple[float, float, float]],
+    ) -> tuple[list[tuple[float, float, float]], list[tuple[float, float, float]]]:
+        midpoint = len(points) // 2
+        downward_window = points[: midpoint + 1]
+        upward_window = points[midpoint + 1 :]
+
+        if len(upward_window) < 2:
+            upward_window = points[-2:]
+
+        return downward_window, upward_window
 
     @staticmethod
     def _average_vertical_speed(points: list[tuple[float, float, float]]) -> float:
