@@ -566,6 +566,7 @@ class FutbolFlowApp:
         self._apply_settings()
 
     def _refresh_history_panel(self) -> None:
+        """Repaint the history-related Tk variables from the latest controller/store snapshot."""
         self.history_summary = self.session_controller.refresh_summary()
         self.personal_best_var.set(str(self.history_summary.personal_best))
         self.best_streak_var.set(str(self.history_summary.best_streak))
