@@ -1,0 +1,52 @@
+<svg width="1100" height="680" viewBox="0 0 1100 680" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Futbol Flow dashboard preview</title>
+  <desc id="desc">A preview of the Futbol Flow desktop dashboard showing a camera feed, juggling count, session stats, and tuning controls.</desc>
+  <rect width="1100" height="680" fill="#F5F7FB"/>
+  <rect x="54" y="44" width="992" height="592" rx="22" fill="#FFFFFF" stroke="#D9E2EC" stroke-width="2"/>
+  <rect x="54" y="44" width="992" height="62" rx="22" fill="#182230"/>
+  <text x="94" y="83" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#FFFFFF">Futbol Flow Counter</text>
+  <text x="1006" y="83" text-anchor="end" font-family="Arial, sans-serif" font-size="14" fill="#C7D7EA">Live tracking preview</text>
+
+  <rect x="88" y="136" width="620" height="384" rx="12" fill="#1C2533"/>
+  <rect x="118" y="166" width="560" height="324" rx="8" fill="#223145"/>
+  <path d="M118 420 C210 385 290 430 382 398 C474 366 536 398 678 354" stroke="#3DDC97" stroke-width="3" opacity="0.6"/>
+  <line x1="118" y1="408" x2="678" y2="408" stroke="#FDE68A" stroke-width="3" stroke-dasharray="12 10"/>
+  <text x="132" y="394" font-family="Arial, sans-serif" font-size="13" fill="#FDE68A">kick zone</text>
+  <circle cx="424" cy="282" r="28" fill="#F8FAFC" stroke="#1D4ED8" stroke-width="5"/>
+  <path d="M424 254 C438 276 438 295 424 310 C410 295 410 276 424 254Z" fill="#93C5FD"/>
+  <path d="M424 282 L424 222" stroke="#22C55E" stroke-width="5" stroke-linecap="round"/>
+  <path d="M424 222 L410 240 M424 222 L438 240" stroke="#22C55E" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="372" cy="332" r="5" fill="#93C5FD" opacity="0.8"/>
+  <circle cx="390" cy="318" r="5" fill="#93C5FD" opacity="0.9"/>
+  <circle cx="408" cy="300" r="5" fill="#93C5FD"/>
+  <rect x="88" y="536" width="620" height="52" rx="12" fill="#EFF6FF"/>
+  <text x="112" y="568" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="#1D4ED8">Tracking locked</text>
+  <text x="676" y="568" text-anchor="end" font-family="Arial, sans-serif" font-size="14" fill="#475467">motion + contour + Kalman prediction</text>
+
+  <rect x="740" y="136" width="272" height="120" rx="14" fill="#EEFDF5" stroke="#BBF7D0"/>
+  <text x="766" y="174" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#166534">Juggle count</text>
+  <text x="766" y="229" font-family="Arial, sans-serif" font-size="58" font-weight="800" fill="#14532D">42</text>
+
+  <rect x="740" y="278" width="272" height="108" rx="14" fill="#F8FAFC" stroke="#E2E8F0"/>
+  <text x="766" y="314" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#334155">Session metrics</text>
+  <text x="766" y="345" font-family="Arial, sans-serif" font-size="14" fill="#475467">Timer: 02:31</text>
+  <text x="890" y="345" font-family="Arial, sans-serif" font-size="14" fill="#475467">Best streak: 18</text>
+  <text x="766" y="370" font-family="Arial, sans-serif" font-size="14" fill="#475467">Speed: 286 px/s</text>
+
+  <rect x="740" y="408" width="272" height="180" rx="14" fill="#F8FAFC" stroke="#E2E8F0"/>
+  <text x="766" y="444" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#334155">Tuning controls</text>
+  <text x="766" y="476" font-family="Arial, sans-serif" font-size="13" fill="#475467">Kick zone</text>
+  <rect x="850" y="467" width="130" height="8" rx="4" fill="#D7DEE8"/>
+  <rect x="850" y="467" width="92" height="8" rx="4" fill="#1D4ED8"/>
+  <circle cx="942" cy="471" r="10" fill="#1D4ED8"/>
+  <text x="766" y="516" font-family="Arial, sans-serif" font-size="13" fill="#475467">Rebound speed</text>
+  <rect x="850" y="507" width="130" height="8" rx="4" fill="#D7DEE8"/>
+  <rect x="850" y="507" width="72" height="8" rx="4" fill="#22C55E"/>
+  <circle cx="922" cy="511" r="10" fill="#22C55E"/>
+  <text x="766" y="556" font-family="Arial, sans-serif" font-size="13" fill="#475467">Motion area</text>
+  <rect x="850" y="547" width="130" height="8" rx="4" fill="#D7DEE8"/>
+  <rect x="850" y="547" width="52" height="8" rx="4" fill="#F59E0B"/>
+  <circle cx="902" cy="551" r="10" fill="#F59E0B"/>
+
+  <text x="550" y="650" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" fill="#667085">Preview illustration of the desktop tracker UI and core metrics</text>
+</svg>

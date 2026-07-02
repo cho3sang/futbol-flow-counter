@@ -2,6 +2,16 @@
 
 Futbol Flow is a desktop Python app that uses OpenCV to track a soccer ball and count juggling touches when the ball reverses from falling to rising inside the kick zone.
 
+![Futbol Flow dashboard preview](docs/screenshots/dashboard-preview.svg)
+
+## What It Demonstrates
+
+- Real-time computer vision with OpenCV
+- State-based event detection for counting juggle touches
+- Kalman-assisted tracking through short occlusions
+- Desktop UI design with live metrics and tuning controls
+- Local session persistence with SQLite
+
 ## Features
 
 - Live webcam mode and local video-file mode
